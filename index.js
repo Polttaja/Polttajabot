@@ -3,9 +3,9 @@ const TelegramBot = require('node-telegram-bot-api')
 
 const MailCow = require('./MailCow')
 const Database = require('./Database')
+const listenEmail = require('./Mail')
 
-const token = process.env.TG_TOKEN 
-const aliasDomain = process.env.ALIAS_DOMAIN
+const [token, aliasDomain, imapHost] = [process.env.TG_TOKEN, process.env.ALIAS_DOMAIN, process.env.IMAP_HOST]
 
 const bot = new TelegramBot(token, {polling: true}) 
 
@@ -21,12 +21,20 @@ const messages = {
     "addAlias": `🤡 Uusi alias on luotu!`
 }
 
+
+const newEmailCallback = (userId, mail) => {
+    const tgMessage = `Uusi viesti!\n\n${mail["from"][0]["address"]} -> ${mail["to"][0]["address"]}\n\n${mail["subject"]}\n\n${mail["text"]}`
+
+    bot.sendMessage(userId, tgMessage)
+}
+
+
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id 
     const userId = msg.from.id
 
     const mailUsername = msg.from.username.toLocaleLowerCase()
-    const mailPassword = (Math.random() + 1).toString(36).substring(7) 
+    const mailPassword = (Math.random() + 1).toString(36).substring(2) 
 
     database.addUser(userId, mailUsername, mailPassword)
     database.save()
@@ -47,7 +55,8 @@ bot.onText(/\/start/, async (msg) => {
     console.log("Created new mailbox!")
 
     await mc.addMailbox(mailbox)
-    bot.sendMessage(chatId, messages.welcome) 
+    listenEmail(`${mailUsername}@${aliasDomain}`, mailPassword, imapHost)
+    bot.sendMessage(chatId, messages.welcome)
 }) 
 
 bot.onText(/\/alias (.+)/, async (msg, match) => {
@@ -86,7 +95,7 @@ bot.onText(/\/list/, async (msg) => {
         userList += `${alias}@${aliasDomain} -> ${mailMainUsername}@${aliasDomain}\n`
     })
 
-    userList += `\nyht. ${emailAliases.length}`
+    userList += `\nyht. ${emailAliases.length} kpl`
 
     bot.sendMessage(chatId, userList)
 })
@@ -121,7 +130,15 @@ bot.onText(/\/delete (.+)/, async (msg, match) => {
     }
 })
 
-// TODO: implement statistics (how much quota used and how many email aliases there are available)
-// TODO: consider deleting every message after they are resent to telegram
-// TODO: better message layout
+// Start maillisteners for all users
 
+const users = database.listUsers()
+
+users.forEach(user => {
+    let [imapUser, imapPass] = [`${user["main"]}@${aliasDomain}`, user["password"]]
+    let aliasCount = user["alias"].length
+    let userId = user["id"]
+
+    listenEmail(imapUser, imapPass, imapHost, newEmailCallback, userId)
+    console.log(`Started maillistener for ${user["main"]} who has ${aliasCount} aliases`)
+})

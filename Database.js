@@ -32,14 +32,27 @@ module.exports = class Database {
         return true
     }
 
-    addAlias(id, localPart) {
-        this.data[id]["alias"].push(localPart)
-    }
-
     getUser(id) {
         if (id in this.data)
             return this.data[id]["main"]
         return false
+    }
+
+    listUsers() {
+        let users = []
+
+        for (const id in this.data) {
+            let userObj = this.data[id]
+            userObj["id"] = id
+
+            users.push(userObj)
+        }
+        
+        return users
+    }
+
+    addAlias(id, localPart) {
+        this.data[id]["alias"].push(localPart)
     }
 
     getAlias(id) {
