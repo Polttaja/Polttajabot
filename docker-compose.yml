@@ -1,0 +1,9 @@
+version: "3.3"
+
+services:
+  polttajabot:
+    build: ./
+    container_name: polttajabot
+    # Environment values can be modified in .env-file (check .env.example for reference)
+    volumes:
+      - ./data:/data/
